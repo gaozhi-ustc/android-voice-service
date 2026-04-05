@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Voice Assistant</string>
+    <string name="notification_channel_name">Voice Service</string>
+    <string name="notification_content">Voice assistant is listening</string>
+    <string name="btn_start_recording">Start Recording</string>
+    <string name="btn_stop_recording">Stop Recording</string>
+    <string name="status_idle">Idle</string>
+    <string name="status_armed">Listening</string>
+    <string name="status_recording">Recording...</string>
+    <string name="status_transcribing">Transcribing...</string>
+    <string name="status_dispatching">Sending...</string>
+    <string name="status_speaking">Speaking...</string>
+    <string name="status_error">Error</string>
+    <string name="settings">Settings</string>
+    <string name="bridge_url">Bridge URL</string>
+    <string name="bridge_token">Bridge Token</string>
+    <string name="device_id">Device ID</string>
+    <string name="save">Save</string>
+</resources>

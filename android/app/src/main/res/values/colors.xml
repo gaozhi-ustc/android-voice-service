@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#1976D2</color>
+    <color name="primary_dark">#1565C0</color>
+    <color name="accent">#FF6F00</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="status_idle">#9E9E9E</color>
+    <color name="status_armed">#4CAF50</color>
+    <color name="status_recording">#F44336</color>
+    <color name="status_processing">#FF9800</color>
+    <color name="status_speaking">#2196F3</color>
+    <color name="status_error">#D32F2F</color>
+    <color name="background">#F5F5F5</color>
+    <color name="card_background">#FFFFFF</color>
+</resources>
