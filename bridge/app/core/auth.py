@@ -1,8 +1,9 @@
+from typing import Optional
 from fastapi import Header, HTTPException, status
 from app.core.config import settings
 
 
-def verify_token(authorization: str | None = Header(default=None)):
+def verify_token(authorization: Optional[str] = Header(default=None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

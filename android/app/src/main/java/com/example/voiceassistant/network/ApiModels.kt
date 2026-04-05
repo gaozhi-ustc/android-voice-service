@@ -21,3 +21,13 @@ data class VoiceCommandResponse(
     val display_text: String? = null,
     val latency_ms: Int = 0
 )
+
+data class AudioCommandResponse(
+    val ok: Boolean,
+    val request_id: String,
+    val recognized_text: String? = null,
+    val reply_text: String? = null,
+    val should_tts: Boolean = true,
+    val tts_text: String? = null,
+    val latency_ms: Int = 0
+)

@@ -11,11 +11,9 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.voiceassistant.R
-import com.example.voiceassistant.asr.AsrManager
 import com.example.voiceassistant.audio.RecorderManager
 import com.example.voiceassistant.audio.VadController
 import com.example.voiceassistant.data.prefs.AppPrefs
-import com.example.voiceassistant.domain.CommandFilter
 import com.example.voiceassistant.domain.VoiceSessionController
 import com.example.voiceassistant.network.GatewayClient
 import com.example.voiceassistant.tts.TtsManager
@@ -35,8 +33,6 @@ class VoiceForegroundService : Service() {
     private lateinit var prefs: AppPrefs
     private lateinit var recorderManager: RecorderManager
     private lateinit var vadController: VadController
-    private lateinit var asrManager: AsrManager
-    private lateinit var commandFilter: CommandFilter
     private lateinit var gatewayClient: GatewayClient
     private lateinit var ttsManager: TtsManager
 
@@ -63,8 +59,6 @@ class VoiceForegroundService : Service() {
     private fun initializeComponents() {
         recorderManager = RecorderManager()
         vadController = VadController()
-        asrManager = AsrManager()
-        commandFilter = CommandFilter()
         gatewayClient = GatewayClient(
             baseUrl = prefs.bridgeBaseUrl,
             bearerToken = prefs.bridgeToken,
@@ -75,8 +69,6 @@ class VoiceForegroundService : Service() {
         sessionController = VoiceSessionController(
             recorderManager = recorderManager,
             vadController = vadController,
-            asrManager = asrManager,
-            commandFilter = commandFilter,
             gatewayClient = gatewayClient,
             ttsManager = ttsManager
         )
@@ -93,8 +85,6 @@ class VoiceForegroundService : Service() {
         sessionController = VoiceSessionController(
             recorderManager = recorderManager,
             vadController = vadController,
-            asrManager = asrManager,
-            commandFilter = commandFilter,
             gatewayClient = gatewayClient,
             ttsManager = ttsManager
         )

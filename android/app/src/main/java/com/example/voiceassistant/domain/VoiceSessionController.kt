@@ -1,7 +1,6 @@
 package com.example.voiceassistant.domain
 
 import android.util.Log
-import com.example.voiceassistant.asr.AsrManager
 import com.example.voiceassistant.audio.RecorderManager
 import com.example.voiceassistant.audio.VadController
 import com.example.voiceassistant.data.models.VoiceState
@@ -16,8 +15,6 @@ import kotlinx.coroutines.withContext
 class VoiceSessionController(
     private val recorderManager: RecorderManager,
     private val vadController: VadController,
-    private val asrManager: AsrManager,
-    private val commandFilter: CommandFilter,
     private val gatewayClient: GatewayClient,
     private val ttsManager: TtsManager,
     private val retryPolicy: RetryPolicy = RetryPolicy()
@@ -76,34 +73,26 @@ class VoiceSessionController(
 
         Log.d(TAG, "Recording stopped: ${audioClip.durationMs}ms, ${audioClip.pcmBytes.size} bytes")
 
+        if (audioClip.pcmBytes.size < 3200) {
+            Log.w(TAG, "Audio too short, ignoring")
+            onError?.invoke("Recording too short")
+            setState(VoiceState.IDLE)
+            return
+        }
+
         scope.launch {
             try {
-                // ASR
-                setState(VoiceState.TRANSCRIBING)
-                val asrResult = withContext(Dispatchers.IO) {
-                    asrManager.transcribe(audioClip)
-                }
-
-                val recognizedText = asrResult.text
-                Log.d(TAG, "ASR result: '$recognizedText' (${asrResult.latencyMs}ms)")
-                onRecognizedText?.invoke(recognizedText)
-
-                // Filter
-                val filterResult = commandFilter.shouldDispatch(recognizedText)
-                if (!filterResult.accepted) {
-                    Log.w(TAG, "Command filtered: ${filterResult.reason}")
-                    onError?.invoke("Filtered: ${filterResult.reason}")
-                    setState(VoiceState.IDLE)
-                    return@launch
-                }
-
-                // Dispatch to Bridge
+                // Send audio to Bridge for remote ASR + execution
                 setState(VoiceState.DISPATCHING)
                 val response = withContext(Dispatchers.IO) {
                     retryPolicy.execute {
-                        gatewayClient.sendCommand(filterResult.normalizedText)
+                        gatewayClient.sendAudioCommand(audioClip)
                     }
                 }
+
+                val recognizedText = response.recognized_text ?: ""
+                Log.d(TAG, "Recognized: '$recognizedText'")
+                onRecognizedText?.invoke(recognizedText)
 
                 if (!response.ok) {
                     Log.e(TAG, "Bridge returned error: ${response.reply_text}")
@@ -113,8 +102,7 @@ class VoiceSessionController(
                 }
 
                 val replyText = response.tts_text ?: response.reply_text ?: ""
-                val displayText = response.display_text ?: response.reply_text ?: ""
-                onReplyText?.invoke(displayText)
+                onReplyText?.invoke(response.reply_text ?: "")
 
                 // TTS
                 if (response.should_tts && replyText.isNotBlank()) {
