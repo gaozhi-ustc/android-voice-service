@@ -22,13 +22,13 @@ cd android
 export JAVA_HOME="/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"
 export ANDROID_HOME="/opt/homebrew/share/android-commandlinetools"
 ./gradlew assembleDebug
-adb -s 192.168.1.34:45963 install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s 192.168.1.34:44229 install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 - Gradle 8.5, AGP 8.2.2, Kotlin 1.9.22
 - minSdk 26, targetSdk 34
 - Device: Xiaomi M2104K10AC, Android 11 (API 30)
-- ADB WiFi debug port: 45963 (may change on reconnect)
+- ADB WiFi debug port: 44229 (may change on reconnect)
 
 ### Bridge Server
 
@@ -39,6 +39,55 @@ python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 - Python 3.9 (Xcode bundled), need `Optional[str]` instead of `str | None`
 - Local IP for phone testing: 192.168.1.32
+
+## Voice Interaction Strategy
+
+### State Machine
+
+7 states, managed by `VoiceSessionController`:
+
+```
+LISTENING → WAKE_TRIGGERED → RECORDING → DISPATCHING → SPEAKING → COOLDOWN → LISTENING
+                                              ↓                       ↑
+                                            ERROR ──(2s delay)────────┘
+```
+
+### States Detail
+
+| State | Behavior |
+|-------|----------|
+| **LISTENING** | Always-on wake word detection (Vosk). AudioRouter feeds frames to wake word engine only. |
+| **WAKE_TRIGGERED** | Wake word detected. Plays "请讲" prompt, then transitions to RECORDING. |
+| **RECORDING** | AudioRouter feeds frames to RecorderManager (accumulates PCM) + VAD. VAD detects silence end → stop and process. Minimum 3200 bytes or discard. |
+| **DISPATCHING** | Sends PCM→WAV to Bridge `/v1/voice/audio-command`. Bridge does ASR + Gateway call. On success with `should_tts` → SPEAKING, otherwise → COOLDOWN. |
+| **SPEAKING** | TTS playback. Barge-in monitoring enabled (energy threshold 2500, sustained 300ms). On barge-in → stop TTS, go to RECORDING. On TTS done → COOLDOWN. |
+| **COOLDOWN** | 9s idle timeout. Energy-based speech detection (threshold 800, sustained 400ms) — if user speaks during cooldown, skip wake word and go directly to RECORDING. On timeout → LISTENING. |
+| **ERROR** | Display error, wait 2s, return to LISTENING. |
+
+### Audio Architecture
+
+- **Single AudioRecord** owned by `AudioRouter` (16kHz mono PCM 16-bit)
+- Audio source: `VOICE_COMMUNICATION` preferred (hardware AEC), fallback to `MIC`
+- AudioRouter dispatches frames to registered consumers; consumers swap on state change via `clearConsumers()`/`addConsumer()`
+- No microphone stop/start between states — AudioRecord runs continuously
+
+### Barge-In
+
+During SPEAKING state, `BargeInMonitor` listens for user speech over TTS playback:
+- Energy threshold 2500 (elevated to avoid speaker echo false triggers)
+- Must sustain 300ms to trigger
+- On trigger: stop TTS immediately, enter RECORDING
+
+### Cooldown (Multi-Turn Support)
+
+After TTS or short responses, enters COOLDOWN instead of LISTENING:
+- User can speak without re-triggering wake word (energy threshold 800, sustained 400ms)
+- 9s timeout returns to LISTENING (wake word required again)
+- Enables natural multi-turn conversations
+
+### Manual Trigger
+
+`manualTrigger()` from UI simulates wake word — works from LISTENING, COOLDOWN, or ERROR states.
 
 ## Key Technical Decisions
 
@@ -65,7 +114,7 @@ MVP flow sends audio (PCM -> WAV) directly to Bridge's `/v1/voice/audio-command`
 1. **Created full Android app** based on `02-android-app-design.md`:
    - Foreground service with notification and boot auto-start
    - PCM 16kHz mono audio recording with VAD (8s max, 1s silence threshold)
-   - Voice session state machine: IDLE -> RECORDING -> DISPATCHING -> SPEAKING -> IDLE
+   - Voice session state machine (see "Voice Interaction Strategy" above)
    - OkHttp client for Bridge API (`/v1/voice/command` and `/v1/voice/audio-command`)
    - Settings UI (Bridge URL, Token, Device ID persisted in SharedPreferences)
    - Command filter with 3s dedup, retry policy with exponential backoff
@@ -92,4 +141,4 @@ MVP flow sends audio (PCM -> WAV) directly to Bridge's `/v1/voice/audio-command`
 - Install a proper TTS engine on phone (or keep online fallback)
 - Connect Bridge to real OpenClaw Gateway
 - HTTPS for production
-- Wake word integration (Porcupine)
+- Wake word: currently using Vosk, consider Porcupine for lower latency
