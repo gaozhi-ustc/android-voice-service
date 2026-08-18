@@ -40,8 +40,8 @@ export ANDROID_HOME="/opt/homebrew/share/android-commandlinetools"
 # 产物: android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-**安装前**：确认 `android/app/build.gradle.kts` 里的 `BRIDGE_BASE_URL` 指向你的 Mac IP
-（默认 `http://192.168.1.116:8000`）。改完需要重新构建。
+**安装前**：默认配置已内置（无需手填）——Bridge URL `https://asr.vongcloud.com`、Token `change-me`。
+如需指向其他 Bridge，改 `android/app/build.gradle.kts` 里的 `BRIDGE_BASE_URL` 后重新构建。
 
 **USB 连接手机后**：
 

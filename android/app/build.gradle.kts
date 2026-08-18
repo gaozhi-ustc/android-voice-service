@@ -14,7 +14,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        buildConfigField("String", "BRIDGE_BASE_URL", "\"http://192.168.1.116:8000\"")
+        buildConfigField("String", "BRIDGE_BASE_URL", "\"https://asr.vongcloud.com\"")
         buildConfigField("String", "BRIDGE_TOKEN", "\"change-me\"")
         buildConfigField("String", "DEVICE_ID", "\"android-phone-01\"")
     }
