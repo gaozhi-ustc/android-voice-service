@@ -29,6 +29,7 @@ class MainActivity : AppCompatActivity() {
             val localBinder = binder as VoiceForegroundService.LocalBinder
             voiceService = localBinder.getService()
             serviceBound = true
+            voiceService?.startPipelineFromForeground()
             setupSessionCallbacks()
         }
 
@@ -49,13 +50,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var serviceStarted = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         setupUI()
-        requestPermissionsAndStart()
     }
 
     private fun setupUI() {
@@ -63,16 +65,13 @@ class MainActivity : AppCompatActivity() {
             val controller = voiceService?.sessionController ?: return@setOnClickListener
 
             when (controller.currentState) {
-                VoiceState.IDLE, VoiceState.ARMED, VoiceState.ERROR -> {
-                    controller.startManualVoiceFlow()
-                }
-                VoiceState.RECORDING -> {
-                    controller.stopRecordingManually()
+                VoiceState.LISTENING, VoiceState.COOLDOWN, VoiceState.ERROR -> {
+                    controller.manualTrigger()
                 }
                 VoiceState.SPEAKING -> {
                     controller.cancel()
                 }
-                else -> { /* ignore during processing */ }
+                else -> { /* ignore during recording/processing */ }
             }
         }
 
@@ -80,13 +79,13 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
-        updateStateUI(VoiceState.IDLE)
+        updateStateUI(VoiceState.LISTENING)
     }
 
     private fun setupSessionCallbacks() {
         val controller = voiceService?.sessionController ?: return
 
-        controller.onStateChanged = { state ->
+        controller.addStateListener { state ->
             runOnUiThread { updateStateUI(state) }
         }
 
@@ -111,45 +110,40 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateStateUI(state: VoiceState) {
         val (statusText, statusColor, buttonText) = when (state) {
-            VoiceState.IDLE -> Triple(
-                getString(R.string.status_idle),
+            VoiceState.LISTENING -> Triple(
+                "等待 \"你好管家\"...",
                 R.color.status_idle,
-                getString(R.string.btn_start_recording)
-            )
-            VoiceState.ARMED -> Triple(
-                getString(R.string.status_armed),
-                R.color.status_armed,
-                getString(R.string.btn_start_recording)
+                "手动触发"
             )
             VoiceState.WAKE_TRIGGERED -> Triple(
-                "Triggered",
+                "已唤醒",
                 R.color.status_processing,
-                getString(R.string.btn_stop_recording)
+                "..."
             )
             VoiceState.RECORDING -> Triple(
                 getString(R.string.status_recording),
                 R.color.status_recording,
                 getString(R.string.btn_stop_recording)
             )
-            VoiceState.TRANSCRIBING -> Triple(
-                getString(R.string.status_transcribing),
-                R.color.status_processing,
-                "Processing..."
-            )
             VoiceState.DISPATCHING -> Triple(
                 getString(R.string.status_dispatching),
                 R.color.status_processing,
-                "Processing..."
+                "处理中..."
             )
             VoiceState.SPEAKING -> Triple(
                 getString(R.string.status_speaking),
                 R.color.status_speaking,
-                "Stop"
+                "停止"
+            )
+            VoiceState.COOLDOWN -> Triple(
+                "等待继续...",
+                R.color.status_armed,
+                "手动触发"
             )
             VoiceState.ERROR -> Triple(
                 getString(R.string.status_error),
                 R.color.status_error,
-                getString(R.string.btn_start_recording)
+                "手动触发"
             )
         }
 
@@ -183,7 +177,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (serviceBound) {
+        if (!serviceStarted) {
+            serviceStarted = true
+            requestPermissionsAndStart()
+        } else if (serviceBound) {
             voiceService?.reinitializeClient()
             setupSessionCallbacks()
         }

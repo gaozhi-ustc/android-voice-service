@@ -14,7 +14,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        buildConfigField("String", "BRIDGE_BASE_URL", "\"https://your-bridge-server.com\"")
+        buildConfigField("String", "BRIDGE_BASE_URL", "\"http://localhost:8000\"")
         buildConfigField("String", "BRIDGE_TOKEN", "\"change-me\"")
         buildConfigField("String", "DEVICE_ID", "\"android-phone-01\"")
     }
@@ -60,4 +60,7 @@ dependencies {
 
     // JSON
     implementation("org.json:json:20231013")
+
+    // Vosk offline speech recognition (wake word detection)
+    implementation("com.alphacephei:vosk-android:0.3.47")
 }

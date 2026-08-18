@@ -1,6 +1,10 @@
+import logging
+
 from fastapi import FastAPI
 from app.api.health import router as health_router
 from app.api.voice import router as voice_router
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 app = FastAPI(title="OpenClaw Voice Bridge", version="0.1.0")
 

@@ -22,13 +22,12 @@ cd android
 export JAVA_HOME="/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"
 export ANDROID_HOME="/opt/homebrew/share/android-commandlinetools"
 ./gradlew assembleDebug
-adb -s 192.168.1.34:44229 install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 - Gradle 8.5, AGP 8.2.2, Kotlin 1.9.22
 - minSdk 26, targetSdk 34
 - Device: Xiaomi M2104K10AC, Android 11 (API 30)
-- ADB WiFi debug port: 44229 (may change on reconnect)
 
 ### Bridge Server
 
@@ -38,7 +37,6 @@ python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 - Python 3.9 (Xcode bundled), need `Optional[str]` instead of `str | None`
-- Local IP for phone testing: 192.168.1.32
 
 ## Voice Interaction Strategy
 

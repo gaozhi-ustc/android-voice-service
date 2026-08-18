@@ -1,70 +1,36 @@
 package com.example.voiceassistant.audio
 
-import android.annotation.SuppressLint
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
 import com.example.voiceassistant.data.models.AudioClip
 
+/**
+ * Accumulates PCM audio frames from AudioRouter into an AudioClip.
+ * No longer owns AudioRecord — frames are fed externally.
+ */
 class RecorderManager {
 
-    private val sampleRate = 16000
-    private val channelConfig = AudioFormat.CHANNEL_IN_MONO
-    private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-    private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-
-    private var audioRecord: AudioRecord? = null
-    @Volatile
-    private var recording = false
     private val chunks = mutableListOf<ByteArray>()
-    private var recordingThread: Thread? = null
+    @Volatile
+    private var accumulating = false
     private var startTimeMs: Long = 0
 
-    var onAudioFrame: ((ByteArray) -> Unit)? = null
-
-    @SuppressLint("MissingPermission")
-    fun startRecording() {
-        if (recording) return
-
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            sampleRate,
-            channelConfig,
-            audioFormat,
-            bufferSize
-        )
-        chunks.clear()
-        startTimeMs = System.currentTimeMillis()
-        audioRecord?.startRecording()
-        recording = true
-
-        recordingThread = Thread {
-            val buffer = ByteArray(bufferSize)
-            while (recording) {
-                val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
-                if (read > 0) {
-                    val chunk = buffer.copyOf(read)
-                    synchronized(chunks) {
-                        chunks.add(chunk)
-                    }
-                    onAudioFrame?.invoke(chunk)
-                }
+    val frameConsumer: (ByteArray) -> Unit = { frame ->
+        if (accumulating) {
+            synchronized(chunks) {
+                chunks.add(frame)
             }
-        }.apply {
-            name = "AudioRecorder"
-            start()
         }
     }
 
-    fun stopRecording(): AudioClip {
-        recording = false
-        recordingThread?.join(1000)
-        recordingThread = null
+    fun startAccumulating() {
+        synchronized(chunks) {
+            chunks.clear()
+        }
+        startTimeMs = System.currentTimeMillis()
+        accumulating = true
+    }
 
-        audioRecord?.stop()
-        audioRecord?.release()
-        audioRecord = null
-
+    fun stopAccumulating(): AudioClip {
+        accumulating = false
         val durationMs = System.currentTimeMillis() - startTimeMs
         val pcmBytes = synchronized(chunks) {
             chunks.fold(ByteArray(0)) { acc, bytes -> acc + bytes }
@@ -72,12 +38,12 @@ class RecorderManager {
 
         return AudioClip(
             pcmBytes = pcmBytes,
-            sampleRate = sampleRate,
+            sampleRate = AudioRouter.SAMPLE_RATE,
             channels = 1,
             format = "PCM_16BIT",
             durationMs = durationMs
         )
     }
 
-    fun isRecording(): Boolean = recording
+    fun isAccumulating(): Boolean = accumulating
 }

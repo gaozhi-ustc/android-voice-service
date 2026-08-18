@@ -11,13 +11,24 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.voiceassistant.R
+import com.example.voiceassistant.audio.AudioRouter
 import com.example.voiceassistant.audio.RecorderManager
 import com.example.voiceassistant.audio.VadController
+import com.example.voiceassistant.audio.VoskWakeWordEngine
+import com.example.voiceassistant.data.models.VoiceState
 import com.example.voiceassistant.data.prefs.AppPrefs
+import com.example.voiceassistant.domain.BargeInMonitor
+import com.example.voiceassistant.domain.IdleTimeoutManager
 import com.example.voiceassistant.domain.VoiceSessionController
 import com.example.voiceassistant.network.GatewayClient
 import com.example.voiceassistant.tts.TtsManager
 import com.example.voiceassistant.ui.MainActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class VoiceForegroundService : Service() {
 
@@ -26,15 +37,20 @@ class VoiceForegroundService : Service() {
         private const val CHANNEL_ID = "voice_service"
         private const val NOTIFICATION_ID = 1
 
-        const val ACTION_START_RECORDING = "com.example.voiceassistant.START_RECORDING"
-        const val ACTION_STOP_RECORDING = "com.example.voiceassistant.STOP_RECORDING"
+        const val ACTION_MANUAL_TRIGGER = "com.example.voiceassistant.MANUAL_TRIGGER"
     }
 
     private lateinit var prefs: AppPrefs
+    private lateinit var audioRouter: AudioRouter
     private lateinit var recorderManager: RecorderManager
     private lateinit var vadController: VadController
+    private lateinit var wakeWordEngine: VoskWakeWordEngine
     private lateinit var gatewayClient: GatewayClient
     private lateinit var ttsManager: TtsManager
+    private lateinit var bargeInMonitor: BargeInMonitor
+    private lateinit var idleTimeoutManager: IdleTimeoutManager
+
+    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
 
     var sessionController: VoiceSessionController? = null
         private set
@@ -50,15 +66,25 @@ class VoiceForegroundService : Service() {
         Log.d(TAG, "Service onCreate")
 
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("Voice assistant is ready"))
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification("正在初始化..."))
+            Log.d(TAG, "startForeground succeeded")
+        } catch (e: Exception) {
+            Log.w(TAG, "startForeground failed (MIUI restriction?), continuing as bound service", e)
+        }
 
         prefs = AppPrefs(this)
         initializeComponents()
     }
 
     private fun initializeComponents() {
+        audioRouter = AudioRouter()
         recorderManager = RecorderManager()
         vadController = VadController()
+        wakeWordEngine = VoskWakeWordEngine(this)
+        bargeInMonitor = BargeInMonitor()
+        idleTimeoutManager = IdleTimeoutManager(serviceScope)
+
         gatewayClient = GatewayClient(
             baseUrl = prefs.bridgeBaseUrl,
             bearerToken = prefs.bridgeToken,
@@ -67,13 +93,64 @@ class VoiceForegroundService : Service() {
         ttsManager = TtsManager(this)
 
         sessionController = VoiceSessionController(
+            audioRouter = audioRouter,
             recorderManager = recorderManager,
             vadController = vadController,
+            wakeWordEngine = wakeWordEngine,
             gatewayClient = gatewayClient,
-            ttsManager = ttsManager
+            ttsManager = ttsManager,
+            bargeInMonitor = bargeInMonitor,
+            idleTimeoutManager = idleTimeoutManager
         )
 
+        // Update notification based on state changes
+        sessionController?.addStateListener { state ->
+            updateNotification(state)
+        }
+
+        // Pre-load Vosk model and TTS prompts asynchronously
+        wakeWordEngine.onModelProgress = { msg ->
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.notify(NOTIFICATION_ID, buildNotification(msg))
+        }
+        serviceScope.launch {
+            withContext(Dispatchers.IO) {
+                wakeWordEngine.initModel()
+                ttsManager.preloadPrompts()
+            }
+            if (wakeWordEngine.isModelReady()) {
+                Log.d(TAG, "Vosk model loaded")
+            } else {
+                Log.e(TAG, "Vosk model failed to load")
+            }
+        }
+
         Log.d(TAG, "Components initialized (bridge=${prefs.bridgeBaseUrl}, device=${prefs.deviceId})")
+    }
+
+    @Volatile
+    private var pipelineStarted = false
+
+    /**
+     * Called by Activity when it is confirmed in the foreground.
+     * Starts AudioRouter and the listening pipeline.
+     */
+    fun startPipelineFromForeground() {
+        if (pipelineStarted) return
+        pipelineStarted = true
+
+        Log.d(TAG, "Starting pipeline from foreground activity")
+        audioRouter.start()
+
+        serviceScope.launch {
+            // Wait for Vosk model if not yet loaded
+            while (!wakeWordEngine.isModelReady()) {
+                Log.d(TAG, "Waiting for Vosk model...")
+                delay(500)
+            }
+            Log.d(TAG, "Starting always-on listening")
+            sessionController?.startAlwaysOnListening()
+        }
     }
 
     fun reinitializeClient() {
@@ -82,19 +159,46 @@ class VoiceForegroundService : Service() {
             bearerToken = prefs.bridgeToken,
             deviceId = prefs.deviceId
         )
+
+        val oldController = sessionController
         sessionController = VoiceSessionController(
+            audioRouter = audioRouter,
             recorderManager = recorderManager,
             vadController = vadController,
+            wakeWordEngine = wakeWordEngine,
             gatewayClient = gatewayClient,
-            ttsManager = ttsManager
+            ttsManager = ttsManager,
+            bargeInMonitor = bargeInMonitor,
+            idleTimeoutManager = idleTimeoutManager
         )
+
+        sessionController?.addStateListener { state ->
+            updateNotification(state)
+        }
+
+        oldController?.cancel()
+        sessionController?.startAlwaysOnListening()
+
         Log.d(TAG, "Client reinitialized with new settings")
+    }
+
+    private fun updateNotification(state: VoiceState) {
+        val text = when (state) {
+            VoiceState.LISTENING -> "等待唤醒词 \"你好管家\"..."
+            VoiceState.WAKE_TRIGGERED -> "已唤醒"
+            VoiceState.RECORDING -> "正在录音..."
+            VoiceState.DISPATCHING -> "正在处理..."
+            VoiceState.SPEAKING -> "正在播报..."
+            VoiceState.COOLDOWN -> "等待继续对话..."
+            VoiceState.ERROR -> "出错了，即将恢复..."
+        }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(NOTIFICATION_ID, buildNotification(text))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START_RECORDING -> sessionController?.startManualVoiceFlow()
-            ACTION_STOP_RECORDING -> sessionController?.stopRecordingManually()
+            ACTION_MANUAL_TRIGGER -> sessionController?.manualTrigger()
         }
         return START_STICKY
     }
@@ -104,6 +208,8 @@ class VoiceForegroundService : Service() {
     override fun onDestroy() {
         Log.d(TAG, "Service onDestroy")
         sessionController?.cancel()
+        audioRouter.stop()
+        wakeWordEngine.shutdown()
         ttsManager.shutdown()
         super.onDestroy()
     }
