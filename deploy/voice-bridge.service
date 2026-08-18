@@ -1,0 +1,17 @@
+[Unit]
+Description=Voice Bridge (FastAPI + Whisper ASR + agent task queue)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# setup.sh 安装到 /opt/voice-bridge，venv 在同目录
+WorkingDirectory=/opt/voice-bridge/bridge
+Environment=HOME=/root
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/voice-bridge/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

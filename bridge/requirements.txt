@@ -4,3 +4,4 @@ httpx
 python-multipart
 pydantic
 pydantic-settings
+faster-whisper
