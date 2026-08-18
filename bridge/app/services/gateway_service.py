@@ -34,7 +34,7 @@ class GatewayService:
         os.makedirs(PENDING_DIR, exist_ok=True)
         os.makedirs(REPLY_DIR, exist_ok=True)
 
-    async def send_text(self, payload: dict, request_id: str = None) -> dict:
+    async def send_text(self, payload: dict, request_id: str = None, started_at: float = None) -> dict:
         text = payload.get("text", "")
         if not request_id:
             request_id = str(uuid.uuid4())
@@ -76,7 +76,9 @@ class GatewayService:
         interim_at = settings.agent_interim_seconds
         grace_at = max(settings.agent_grace_deadline_seconds, interim_at)
         interim_text = "正在查询，请稍后。"
-        t0 = time.time()
+        # Timer starts when ASR began (started_at passed from the handler),
+        # so the interim/grace windows cover the whole request lifetime.
+        t0 = started_at if started_at is not None else time.time()
 
         def _take_reply() -> str:
             with open(reply_path, encoding="utf-8") as f:

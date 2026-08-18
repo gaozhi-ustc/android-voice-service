@@ -38,7 +38,7 @@ async def voice_command(
         },
     }
 
-    result = await gateway_service.send_text(payload, request_id=request_id)
+    result = await gateway_service.send_text(payload, request_id=request_id, started_at=started)
     latency_ms = int((time.time() - started) * 1000)
 
     reply_text = result.get("reply_text", "")
@@ -108,7 +108,7 @@ async def audio_command(
         },
     }
 
-    result = await gateway_service.send_text(payload, request_id=request_id)
+    result = await gateway_service.send_text(payload, request_id=request_id, started_at=started)
     latency_ms = int((time.time() - started) * 1000)
     reply_text = result.get("reply_text", "")
 
