@@ -27,13 +27,22 @@ PUSH_AFTER_SECONDS = 13
 
 
 async def late_reply_outboxer() -> None:
-    """Watch for late agent replies and move them into the outbox."""
+    """Watch for late agent replies and move them into the outbox.
+
+    A reply is released for polling as soon as EITHER:
+      - a release marker exists (request already answered the phone), or
+      - the file is older than PUSH_AFTER_SECONDS (crash fallback: if the
+        bridge died before writing the marker, the old mtime rule applies)
+    """
     os.makedirs(OUTBOX_DIR, exist_ok=True)
     while True:
         await asyncio.sleep(1)
         for path in glob.glob(os.path.join(REPLY_DIR, "*.json")):
+            task_id = os.path.basename(path)[:-5]
             try:
-                if time.time() - os.path.getmtime(path) < PUSH_AFTER_SECONDS:
+                marker = os.path.join(REPLY_DIR, f"released-{task_id}.marker")
+                released = os.path.exists(marker)
+                if not released and time.time() - os.path.getmtime(path) < PUSH_AFTER_SECONDS:
                     continue
                 with open(path, encoding="utf-8") as f:
                     data = json.load(f)
@@ -42,11 +51,20 @@ async def late_reply_outboxer() -> None:
                     continue
                 dest = os.path.join(OUTBOX_DIR, os.path.basename(path))
                 os.rename(path, dest)
-                logger.info("Late reply moved to outbox for phone polling: '%s'", text[:60])
+                if os.path.exists(marker):
+                    os.unlink(marker)
+                logger.info("Late reply moved to outbox for phone polling%s: '%s'", " (released)" if released else "", text[:60])
             except FileNotFoundError:
                 continue  # consumed by the request handler
             except Exception as e:
                 logger.error("late reply outbox error: %s", e)
+        # prune stale release markers (task was answered in time, reply never came)
+        for marker in glob.glob(os.path.join(REPLY_DIR, "released-*.marker")):
+            try:
+                if time.time() - os.path.getmtime(marker) > 600:
+                    os.unlink(marker)
+            except OSError:
+                continue
 
 
 def claim_outbox_reply() -> str:

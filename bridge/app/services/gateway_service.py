@@ -118,7 +118,17 @@ class GatewayService:
                     "message_id": request_id,
                 }
             if elapsed >= grace_at:
-                logger.info("Interim response for [%s] at %.1fs, task still running", request_id[:8], elapsed)
+                # The HTTP response goes out now, so the request will never
+                # consume the reply file. Mark the task released so the
+                # outboxer can deliver a late reply to the phone immediately
+                # (phone polling) instead of waiting PUSH_AFTER_SECONDS.
+                marker = os.path.join(REPLY_DIR, f"released-{request_id}.marker")
+                try:
+                    with open(marker, "w") as f:
+                        f.write("")
+                except OSError:
+                    pass
+                logger.info("Interim response for [%s] at %.1fs, task still running (reply released for polling)", request_id[:8], elapsed)
                 return {
                     "ok": True,
                     "reply_text": interim_text,
