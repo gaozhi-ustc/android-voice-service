@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     asr_model: str = "medium"
     # File queue directory for the agent session
     voice_agent_task_dir: str = "/tmp/voice-bridge-tasks"
+    # ctranslate2 worker threads (cap for big multi-core servers)
+    asr_cpu_threads: int = 4
     # Voice reply timing (seconds from task queue):
     #  - reply ready before agent_interim_seconds        -> speak the answer
     #  - reply ready in [interim, grace_deadline)        -> at grace_deadline speak
@@ -19,7 +21,7 @@ class Settings(BaseSettings):
     #  - nothing by grace_deadline                        -> speak the interim only;
     #    the final reply file is delivered on the next voice turn
     agent_interim_seconds: int = 5
-    agent_grace_deadline_seconds: int = 12
+    agent_grace_deadline_seconds: int = 7
 
     class Config:
         env_file = ".env"
