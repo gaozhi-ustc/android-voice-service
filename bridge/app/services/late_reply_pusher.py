@@ -23,9 +23,9 @@ REPLY_DIR = os.path.join(TASK_DIR, "replies")
 OUTBOX_DIR = os.path.join(REPLY_DIR, "outbox")
 
 # Replies younger than this are still owned by the request handler
-# (fast <5s or grace <=7s). Anything older is "late" and goes to the
+# (fast <3s or grace <=5s). Anything older is "late" and goes to the
 # outbox for phone polling. Keep a bit above agent_grace_deadline_seconds.
-PUSH_AFTER_SECONDS = 8
+PUSH_AFTER_SECONDS = 6
 
 
 async def late_reply_outboxer() -> None:

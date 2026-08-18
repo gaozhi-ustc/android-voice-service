@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     #    "正在查询，请稍后。" + the answer (keeps late-but-quick answers)
     #  - nothing by grace_deadline                        -> speak the interim only;
     #    the final reply file is delivered on the next voice turn
-    agent_interim_seconds: int = 5
-    agent_grace_deadline_seconds: int = 7
+    agent_interim_seconds: int = 3
+    agent_grace_deadline_seconds: int = 5
 
     class Config:
         env_file = ".env"
