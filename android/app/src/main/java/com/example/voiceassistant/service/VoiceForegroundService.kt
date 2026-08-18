@@ -38,6 +38,7 @@ class VoiceForegroundService : Service() {
         private const val NOTIFICATION_ID = 1
 
         const val ACTION_MANUAL_TRIGGER = "com.example.voiceassistant.MANUAL_TRIGGER"
+        const val ACTION_SPEAK = "com.example.voiceassistant.SPEAK"
     }
 
     private lateinit var prefs: AppPrefs
@@ -108,6 +109,9 @@ class VoiceForegroundService : Service() {
             updateNotification(state)
         }
 
+        // Poll the bridge for late replies over WiFi (replaces USB/adb push)
+        startLateReplyPolling()
+
         // Pre-load Vosk model and TTS prompts asynchronously
         wakeWordEngine.onModelProgress = { msg ->
             val manager = getSystemService(NotificationManager::class.java)
@@ -150,6 +154,30 @@ class VoiceForegroundService : Service() {
             }
             Log.d(TAG, "Starting always-on listening")
             sessionController?.startAlwaysOnListening()
+        }
+    }
+
+    // --- Late reply polling (WiFi) ---
+
+    private var lateReplyPollingStarted = false
+
+    private fun startLateReplyPolling() {
+        if (lateReplyPollingStarted) return
+        lateReplyPollingStarted = true
+        Log.d(TAG, "Starting late reply polling (every 1s)")
+        serviceScope.launch {
+            while (true) {
+                delay(1000)
+                try {
+                    val text = gatewayClient.pollReply()
+                    if (!text.isNullOrBlank()) {
+                        Log.d(TAG, "Late reply received via poll: $text")
+                        speakAdHoc(text)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Late reply poll failed: ${e.message}")
+                }
+            }
         }
     }
 
@@ -199,8 +227,34 @@ class VoiceForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_MANUAL_TRIGGER -> sessionController?.manualTrigger()
+            ACTION_SPEAK -> {
+                val text = intent.getStringExtra("text")
+                if (!text.isNullOrBlank()) speakAdHoc(text)
+            }
         }
         return START_STICKY
+    }
+
+    /**
+     * Speak a late reply without disturbing the voice session state machine.
+     * Retries while the session is in an audio-busy state.
+     */
+    private fun speakAdHoc(text: String, attempt: Int = 0) {
+        val state = sessionController?.currentState
+        if (state == VoiceState.SPEAKING || state == VoiceState.RECORDING ||
+            state == VoiceState.DISPATCHING || state == VoiceState.WAKE_TRIGGERED
+        ) {
+            if (attempt < 10) {
+                Log.d(TAG, "Ad-hoc TTS deferred (state=$state, attempt=$attempt)")
+                serviceScope.launch {
+                    delay(2000)
+                    speakAdHoc(text, attempt + 1)
+                }
+            }
+            return
+        }
+        Log.d(TAG, "Ad-hoc TTS: $text")
+        ttsManager.speakAdHoc(text)
     }
 
     override fun onBind(intent: Intent?): IBinder = binder

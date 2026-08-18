@@ -43,9 +43,21 @@ class TtsManager(private val appContext: Context) {
         }
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) { speaking = false; onSpeakingDone?.invoke() }
+            override fun onDone(utteranceId: String?) {
+                if (utteranceId == "adhoc") {
+                    adHocCallbacks.remove(utteranceId)?.invoke()
+                    return
+                }
+                speaking = false; onSpeakingDone?.invoke()
+            }
             @Deprecated("Deprecated in Java")
-            override fun onError(utteranceId: String?) { speaking = false; onSpeakingDone?.invoke() }
+            override fun onError(utteranceId: String?) {
+                if (utteranceId == "adhoc") {
+                    adHocCallbacks.remove(utteranceId)?.invoke()
+                    return
+                }
+                speaking = false; onSpeakingDone?.invoke()
+            }
         })
         engine.setSpeechRate(1.5f)
         nativeTtsReady = true
@@ -197,6 +209,31 @@ class TtsManager(private val appContext: Context) {
     }
 
     private val httpClient = OkHttpClient()
+
+    /**
+     * Ad-hoc speak that does NOT touch the session's onSpeakingDone callback.
+     * Used for late reply delivery (adb broadcast) so the voice session
+     * state machine is not disturbed.
+     */
+    private val adHocCallbacks = HashMap<String, () -> Unit>()
+
+    fun speakAdHoc(text: String, onDone: (() -> Unit)? = null) {
+        val cleaned = stripMarkdown(text)
+        if (cleaned.isBlank()) {
+            onDone?.invoke()
+            return
+        }
+        if (nativeTtsReady && tts != null) {
+            Log.d(TAG, "Ad-hoc TTS: $cleaned")
+            adHocCallbacks["adhoc"] = onDone ?: {}
+            tts!!.speak(cleaned, TextToSpeech.QUEUE_FLUSH, null, "adhoc")
+        } else {
+            // Rare fallback: borrow the online path (native TTS unavailable)
+            Log.d(TAG, "Ad-hoc TTS via online fallback: $cleaned")
+            onSpeakingDone = onDone
+            speakOnline(cleaned)
+        }
+    }
 
     private fun cachePrompt(text: String): File? {
         val file = File(promptCacheDir, "${text.hashCode()}.mp3")

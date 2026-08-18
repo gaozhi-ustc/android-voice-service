@@ -10,8 +10,8 @@ data class VadDecision(
 
 class VadController {
 
-    private val maxRecordingMs = 8000L
-    private val silenceThresholdMs = 1000L
+    private val maxRecordingMs = 12000L
+    private val silenceThresholdMs = 1500L
     private val minSpeechMs = 600L
     private val energyThreshold = 500
 

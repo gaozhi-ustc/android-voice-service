@@ -35,13 +35,21 @@
         <service
             android:name=".service.VoiceForegroundService"
             android:foregroundServiceType="microphone"
-            android:exported="false" />
+            android:exported="true" />
 
         <receiver
             android:name=".service.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".service.SpeakReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.voiceassistant.SPEAK" />
             </intent-filter>
         </receiver>
 

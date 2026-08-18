@@ -1,10 +1,14 @@
 import io
+import os
 import time
 import logging
 import tempfile
-import os
 
 logger = logging.getLogger(__name__)
+
+# base is fast but weak on Mandarin; medium is much more accurate and still
+# real-time on Apple Silicon. Override with ASR_MODEL env if needed.
+MODEL_NAME = os.environ.get("ASR_MODEL", "medium")
 
 _model = None
 
@@ -13,8 +17,8 @@ def _get_model():
     global _model
     if _model is None:
         from faster_whisper import WhisperModel
-        logger.info("Loading Whisper model (base)...")
-        _model = WhisperModel("base", device="cpu", compute_type="int8")
+        logger.info("Loading Whisper model (%s, int8, cpu)...", MODEL_NAME)
+        _model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8")
         logger.info("Whisper model loaded")
     return _model
 
@@ -37,6 +41,7 @@ class AsrService:
                 language="zh",
                 beam_size=5,
                 vad_filter=True,
+                initial_prompt="以下是普通话语音转写，请使用简体中文，不要使用繁体字。",
             )
 
             text_parts = []

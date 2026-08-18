@@ -121,3 +121,16 @@ async def audio_command(
         "tts_text": reply_text,
         "latency_ms": latency_ms,
     }
+
+
+@router.get("/voice/poll")
+async def voice_poll(
+    _: bool = Depends(verify_token),
+):
+    """Phone polls this to pick up late replies (WiFi, no USB).
+
+    Returns the oldest outbox reply and removes it, or an empty string.
+    """
+    from app.services.late_reply_pusher import claim_outbox_reply
+
+    return {"ok": True, "reply_text": claim_outbox_reply()}

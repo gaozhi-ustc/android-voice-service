@@ -139,6 +139,28 @@ class GatewayClient(
             }
         }
 
+    /**
+     * Poll for late replies (long tasks whose answer landed after the
+     * interim response). Returns null when there is nothing pending.
+     */
+    suspend fun pollReply(): String? = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/v1/voice/poll")
+            .addHeader("Authorization", "Bearer $bearerToken")
+            .get()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                Log.w(TAG, "Poll failed: ${response.code}")
+                return@withContext null
+            }
+            val body = response.body?.string().orEmpty()
+            val text = JSONObject(body).optString("reply_text", "")
+            text.ifBlank { null }
+        }
+    }
+
     private fun pcmToWav(pcm: ByteArray, sampleRate: Int, channels: Int): ByteArray {
         val bitsPerSample = 16
         val byteRate = sampleRate * channels * bitsPerSample / 8
