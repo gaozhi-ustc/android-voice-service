@@ -54,3 +54,22 @@ systemctl restart voice-bridge       # 重启（改 .env 后）
   "from faster_whisper import WhisperModel; WhisperModel('medium', device='cpu', compute_type='int8')"
                                       # 预热模型缓存
 ```
+
+## 实战案例：192.168.0.64（Ubuntu 22.04，2026-08-18）
+
+首次部署踩到的坑，全部已解决：
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| 端口 8000 被占 | 服务器上跑着 vllm 推理服务 | Bridge 改用 8001 |
+| `python3 -m venv` 失败 | Ubuntu 缺 python3-venv 包（要 sudo） | 改 `pip install --user` |
+| 启动即崩 `extra_forbidden` | pydantic-settings 默认拒绝 .env 里的未知变量 | 代码已修（extra=ignore + 正式声明字段） |
+| ASR 卡死 2 分钟 | 服务器访问不了 HuggingFace，hub 校验 revision 失败 | `HF_HUB_OFFLINE=1` + 提前 rsync 模型缓存（1.5G，局域网秒传） |
+| ssh 里 pkill 自杀 | pkill -f 的模式匹配到 ssh 自己的 bash -c 命令行 | pkill 和启动命令分开两条 ssh 执行 |
+| 服务器时钟慢 40 分钟 | 未同步 NTP | 建议 `sudo timedatectl set-ntp true`（不影响功能，只影响日志时间） |
+
+部署产物：`deploy/voice-bridge-0.64.service`（该服务器专用 systemd 单元，
+`User=gaozhi` + 8001 + HF_HUB_OFFLINE，装法见上文的 sudo 命令，端口按此单元）。
+
+手机端注意：手机在 192.168.1.x 网段，服务器在 192.168.0.x，
+若路由器不跨网段路由，手机连不上服务器，需要在同一网段下使用。

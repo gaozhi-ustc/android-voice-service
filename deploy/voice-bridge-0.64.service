@@ -1,0 +1,20 @@
+[Unit]
+Description=Voice Bridge (192.168.0.64, port 8001)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 依赖装在 gaozhi 的 --user 目录，模型缓存在其 home，故以普通用户运行
+User=gaozhi
+WorkingDirectory=/home/gaozhi/git_projects/android-voice-service/bridge
+Environment=HOME=/home/gaozhi
+Environment=PATH=/home/gaozhi/.local/bin:/usr/local/bin:/usr/bin:/bin
+# 服务器访问不了 HuggingFace，强制离线用本地模型缓存
+Environment=HF_HUB_OFFLINE=1
+ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8001
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

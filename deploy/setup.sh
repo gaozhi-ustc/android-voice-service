@@ -22,10 +22,17 @@ cp -r "$SRC_DIR/bridge" "$INSTALL_DIR/bridge"
 cp -r "$SRC_DIR/tools"  "$INSTALL_DIR/tools"
 
 echo "== 2. 创建 venv 并安装依赖 =="
-python3 -m venv "$INSTALL_DIR/.venv"
-"$INSTALL_DIR/.venv/bin/pip" install -q --upgrade pip
-"$INSTALL_DIR/.venv/bin/pip" install -q -r "$INSTALL_DIR/bridge/requirements.txt"
-echo "   依赖安装完成（首次会自动下载 Whisper 模型缓存目录: ~/.cache/huggingface）"
+if python3 -m venv "$INSTALL_DIR/.venv" 2>/dev/null; then
+    PY="$INSTALL_DIR/.venv/bin/python"
+    "$PY" -m pip install -q --upgrade pip
+    "$PY" -m pip install -q -r "$INSTALL_DIR/bridge/requirements.txt"
+    echo "   venv 安装完成"
+else
+    echo "   无 venv 模块 (缺 python3-venv)，改用 pip --user"
+    python3 -m pip install --user -q -r "$INSTALL_DIR/bridge/requirements.txt"
+fi
+echo "   提示: 若服务器访问不了 HuggingFace，启动前加 HF_HUB_OFFLINE=1，" \
+     "并提前把 ~/.cache/huggingface/hub 模型缓存 rsync 过去"
 
 echo "== 3. 生成 .env =="
 if [ ! -f "$INSTALL_DIR/bridge/.env" ]; then
