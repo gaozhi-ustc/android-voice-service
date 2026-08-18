@@ -4,11 +4,13 @@ import time
 import logging
 import tempfile
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 # base is fast but weak on Mandarin; medium is much more accurate and still
-# real-time on Apple Silicon. Override with ASR_MODEL env if needed.
-MODEL_NAME = os.environ.get("ASR_MODEL", "medium")
+# real-time on Apple Silicon / server CPUs. Configure via ASR_MODEL in .env.
+MODEL_NAME = settings.asr_model
 
 _model = None
 

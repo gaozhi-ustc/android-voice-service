@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     openclaw_cli_path: str = "/Users/gaozhi/.nvm/versions/node/v24.10.0/bin/openclaw"
     home_dir: str = "/Users/gaozhi"
     request_timeout_seconds: int = 60
+    # ASR model: tiny / base / small / medium / large-v3
+    asr_model: str = "medium"
+    # File queue directory for the agent session
+    voice_agent_task_dir: str = "/tmp/voice-bridge-tasks"
     # Voice reply timing (seconds from task queue):
     #  - reply ready before agent_interim_seconds        -> speak the answer
     #  - reply ready in [interim, grace_deadline)        -> at grace_deadline speak
@@ -19,6 +23,8 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        # Unknown env vars (e.g. system noise) must not crash startup
+        extra = "ignore"
 
 
 settings = Settings()

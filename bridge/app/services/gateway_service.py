@@ -21,9 +21,11 @@ import uuid
 
 from app.core.config import settings
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
-TASK_DIR = os.environ.get("VOICE_AGENT_TASK_DIR", "/tmp/voice-bridge-tasks")
+TASK_DIR = settings.voice_agent_task_dir
 PENDING_DIR = os.path.join(TASK_DIR, "pending")
 REPLY_DIR = os.path.join(TASK_DIR, "replies")
 POLL_INTERVAL = 0.3
